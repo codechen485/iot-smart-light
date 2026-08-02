@@ -5,8 +5,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'Dashboard',
-      component: () => import('../views/Dashboard.vue')
+      redirect: '/devices'
     },
     {
       path: '/devices',
@@ -19,9 +18,9 @@ const router = createRouter({
       component: () => import('../views/DeviceDetail.vue')
     },
     {
-      path: '/monitor',
-      name: 'Monitor',
-      component: () => import('../views/Monitor.vue')
+      path: '/history',
+      name: 'History',
+      component: () => import('../views/History.vue')
     },
     {
       path: '/alerts',

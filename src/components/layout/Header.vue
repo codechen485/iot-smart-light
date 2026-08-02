@@ -1,5 +1,5 @@
 <template>
-  <header class="header">
+  <header class="header" :style="{ left: collapsed ? '64px' : '220px' }">
     <div class="header-left">
       <button class="menu-toggle" @click="$emit('toggleSidebar')">
         <component :is="icons.Menu" />
@@ -8,7 +8,7 @@
         {{ pageTitle }}
       </div>
     </div>
-    
+
     <div class="header-right">
       <div class="status-badge">
         <span class="status-dot online"></span>
@@ -27,13 +27,21 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { Menu, User } from '@element-plus/icons-vue'
 
+defineProps({
+  collapsed: {
+    type: Boolean,
+    default: false
+  }
+})
+
+defineEmits(['toggleSidebar'])
+
 const icons = { Menu, User }
 const route = useRoute()
 
 const pageTitleMap = {
-  '/': '系统总览',
   '/devices': '设备管理',
-  '/monitor': '实时监控',
+  '/history': '历史查询',
   '/alerts': '告警管理',
   '/detect': '智能检测'
 }
@@ -44,8 +52,6 @@ const pageTitle = computed(() => {
   }
   return pageTitleMap[route.path] || '智能灯杆系统'
 })
-
-defineEmits(['toggleSidebar'])
 </script>
 
 <style scoped>
@@ -58,11 +64,11 @@ defineEmits(['toggleSidebar'])
   align-items: center;
   justify-content: space-between;
   position: fixed;
-  left: 220px;
   right: 0;
   top: 0;
   z-index: 99;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: left 0.3s ease;
 }
 
 .header-left {

@@ -2,11 +2,11 @@ import request from '../utils/request'
 import { IS_MOCK, MOCK_DELAY } from '../config'
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-
+//修改
 const mockDeviceList = [
   { deviceId: 'light_01' },
   { deviceId: 'light_02' },
-  { deviceId: 'light_03' }
+  { deviceId: 'light_03' },
 ]
 
 const formatTime = (date) => {
@@ -14,7 +14,7 @@ const formatTime = (date) => {
   const d = date instanceof Date ? date : new Date()
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
-
+//修改
 const generateRealTimeData = (deviceId) => {
   const now = formatTime()
   const data = {
@@ -31,7 +31,7 @@ const generateHistoryData = (params) => {
   const start = new Date(startTime)
   const end = new Date(endTime)
   const interval = (end - start) / 24
-
+  //修改
   for (let i = 0; i < 24; i++) {
     const time = new Date(start.getTime() + i * interval)
     data.push({
@@ -85,6 +85,7 @@ export async function getDeviceList() {
   }
   try {
     return await request({
+      //修改接口
       url: '/api/light/list',
       method: 'get'
     })
@@ -101,6 +102,7 @@ export async function getRealTimeData(deviceId) {
   }
   try {
     return await request({
+      //修改接口
       url: '/api/light/real',
       method: 'get',
       params: { deviceId }
@@ -118,6 +120,7 @@ export async function controlDevice(data) {
   }
   try {
     return await request({
+      //修改接口
       url: '/api/light/control',
       method: 'post',
       data
@@ -182,19 +185,26 @@ export async function getAlertList(params) {
 export async function getVideoStream(deviceId) {
   if (IS_MOCK) {
     await delay(MOCK_DELAY)
-    return { data: generateMockVideoFrame() }
+    return generateMockVideoFrame()
   }
   try {
-    const blob = await request({
+    // 文档定义：接口返回 JSON，data 字段是视频流地址 URL 字符串
+    // 如 {"code":200,"msg":"success","data":"http://192.168.162.114:5000/camera/stream"}
+    const url = await request({
       url: '/api/light/video/stream',
       method: 'get',
-      params: { deviceId },
-      responseType: 'blob'
+      params: { deviceId }
     })
-    return { data: blob ? URL.createObjectURL(blob) : null }
+    // 将绝对 URL 转为同源路径，走 Vite 代理，避免 Canvas 截帧跨域
+    // http://192.168.162.114:5000/camera/stream → /camera/stream
+    if (url && typeof url === 'string' && url.startsWith('http')) {
+      const parsed = new URL(url)
+      return parsed.pathname + parsed.search
+    }
+    return url
   } catch (error) {
     console.log('[API] getVideoStream:', error.message)
-    return { data: null }
+    return null
   }
 }
 

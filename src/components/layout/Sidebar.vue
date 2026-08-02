@@ -1,15 +1,15 @@
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ collapsed: collapsed }">
     <div class="sidebar-header">
       <div class="logo">
         <component :is="icons.Lightbulb" class="logo-icon" />
         <span class="logo-text">智能灯杆</span>
       </div>
     </div>
-    
+
     <nav class="sidebar-nav">
-      <router-link 
-        v-for="item in menuItems" 
+      <router-link
+        v-for="item in menuItems"
         :key="item.path"
         :to="item.path"
         class="nav-item"
@@ -23,26 +23,32 @@
 </template>
 
 <script setup>
-import { 
-  Cpu, 
-  VideoCamera, 
-  Bell, 
+import {
+  Cpu,
+  Clock,
+  Bell,
   Camera,
-  Lightning 
+  Lightning
 } from '@element-plus/icons-vue'
+
+defineProps({
+  collapsed: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const icons = {
   Cpu,
-  VideoCamera,
+  Clock,
   Bell,
   Camera,
   Lightbulb: Lightning
 }
 
 const menuItems = [
-  { path: '/', label: '总览', icon: Cpu },
   { path: '/devices', label: '设备管理', icon: Cpu },
-  { path: '/monitor', label: '实时监控', icon: VideoCamera },
+  { path: '/history', label: '历史查询', icon: Clock },
   { path: '/alerts', label: '告警管理', icon: Bell },
   { path: '/detect', label: '智能检测', icon: Camera }
 ]
@@ -58,6 +64,34 @@ const menuItems = [
   top: 0;
   display: flex;
   flex-direction: column;
+  transition: width 0.3s ease;
+  z-index: 100;
+  overflow: hidden;
+}
+
+/* 收缩状态：宽度变为 64px，隐藏文字 */
+.sidebar.collapsed {
+  width: 64px;
+}
+
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .nav-text {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar.collapsed .logo {
+  justify-content: center;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 14px;
 }
 
 .sidebar-header {
@@ -75,12 +109,14 @@ const menuItems = [
   width: 32px;
   height: 32px;
   color: #4a6cf7;
+  flex-shrink: 0;
 }
 
 .logo-text {
   font-size: 18px;
   font-weight: 600;
   color: #f1f5f9;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -113,35 +149,37 @@ const menuItems = [
 .nav-icon {
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
 }
 
 .nav-text {
   font-size: 14px;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
   .sidebar {
     width: 60px;
   }
-  
+
   .logo-text {
     display: none;
   }
-  
+
   .nav-text {
     display: none;
   }
-  
+
   .sidebar-header {
     padding: 16px;
     display: flex;
     justify-content: center;
   }
-  
+
   .logo {
     justify-content: center;
   }
-  
+
   .nav-item {
     justify-content: center;
     padding: 14px;

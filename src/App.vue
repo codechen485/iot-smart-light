@@ -1,8 +1,8 @@
 <template>
   <div class="app-container">
-    <Sidebar />
-    <div class="main-content">
-      <Header @toggle-sidebar="toggleSidebar" />
+    <Sidebar :collapsed="sidebarCollapsed" />
+    <div class="main-content" :style="{ marginLeft: sidebarCollapsed ? '64px' : '220px' }">
+      <Header :collapsed="sidebarCollapsed" @toggle-sidebar="toggleSidebar" />
       <router-view />
     </div>
   </div>
@@ -29,14 +29,15 @@ const toggleSidebar = () => {
 
 .main-content {
   flex: 1;
-  margin-left: 220px;
+  min-width: 0;
   min-height: 100vh;
   padding-top: 60px;
+  transition: margin-left 0.3s ease;
 }
 
 @media (max-width: 768px) {
   .main-content {
-    margin-left: 60px;
+    margin-left: 60px !important;
   }
 }
 </style>

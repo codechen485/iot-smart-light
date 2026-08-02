@@ -5,11 +5,6 @@
         <h1 class="page-title">智能检测</h1>
         <p class="page-subtitle">基于YOLO的行人检测与分析</p>
       </div>
-      <div class="header-right">
-        <el-button type="primary" :icon="icons.Search" @click="startDetection">
-          开始检测
-        </el-button>
-      </div>
     </div>
     
     <div class="detect-grid">
@@ -22,13 +17,15 @@
               <span>{{ isStreaming ? '监控中' : '离线' }}</span>
             </div>
           </div>
+          
           <div class="video-container">
-            <img v-if="currentImage" :src="currentImage" class="video-image" />
+            <img v-if="currentImage" ref="videoImgRef" :src="currentImage" class="video-image" />
             <div v-else class="video-placeholder">
               <component :is="icons.Video" class="placeholder-icon" />
               <span class="placeholder-text">{{ isStreaming ? '正在加载...' : '点击开始监控' }}</span>
             </div>
           </div>
+
           <div class="video-controls">
             <el-button size="small" :icon="isStreaming ? icons.Pause : icons.Play" @click="toggleStream">
               {{ isStreaming ? '停止监控' : '开始监控' }}
@@ -49,7 +46,7 @@
           </div>
           <img :src="capturedFrame" class="captured-image" />
           <div class="captured-actions">
-            <el-button type="primary" :icon="icons.Search" @click="startDetection">
+            <el-button type="primary" :icon="icons.Search" :loading="isDetecting" @click="startDetection">
               开始检测
             </el-button>
             <el-button @click="clearCaptured">清除</el-button>
@@ -109,23 +106,33 @@
             <h3 class="section-title">检测历史</h3>
             <el-button size="small" @click="loadHistory">刷新</el-button>
           </div>
+
           <div class="filter-bar">
             <el-select v-model="filterDevice" placeholder="选择设备" class="filter-select">
               <el-option label="全部" value="" />
-              <el-option label="light_01" value="light_01" />
-              <el-option label="light_02" value="light_02" />
-              <el-option label="light_03" value="light_03" />
+              <el-option v-for="d in devices" :key="d.deviceId" :label="d.deviceId" :value="d.deviceId" />
             </el-select>
-            <el-date-picker 
-              v-model="dateRange" 
-              type="daterange" 
-              range-separator="至" 
-              start-placeholder="开始" 
-              end-placeholder="结束"
+
+            <el-date-picker
+              v-model="startTime"
+              type="datetime"
+              placeholder="开始时间"
               class="date-picker"
+              format="YYYY-MM-DD HH:mm:ss"
+              value-format="YYYY-MM-DD HH:mm:ss"
+            />
+            <span class="range-separator">至</span>
+            <el-date-picker
+              v-model="endTime"
+              type="datetime"
+              placeholder="结束时间"
+              class="date-picker"
+              format="YYYY-MM-DD HH:mm:ss"
+              value-format="YYYY-MM-DD HH:mm:ss"
             />
             <el-button size="small" type="primary" @click="filterHistory">筛选</el-button>
           </div>
+          
           <div class="history-list">
             <div 
               v-for="record in filteredHistory" 
@@ -181,6 +188,7 @@ const currentImage = ref('');
 const capturedFrame = ref('');
 const capturedTime = ref('');
 const lastDetectTime = ref('');
+const videoImgRef = ref(null);
 
 const detectResult = ref({
   personNum: 0,
@@ -193,7 +201,8 @@ const hasDetected = ref(false);
 
 const detectHistory = ref([]);
 const filterDevice = ref('');
-const dateRange = ref([]);
+const startTime = ref('');
+const endTime = ref('');
 
 let streamInterval = null;
 
@@ -213,23 +222,28 @@ const toggleStream = () => {
 
 const startStream = async () => {
   isStreaming.value = true;
-  const result = await getVideoStream(selectedDevice.value);
-  if (!result.data) {
+  const streamUrl = await getVideoStream(selectedDevice.value);
+  if (!streamUrl) {
     isStreaming.value = false;
     ElMessage.warning('视频流连接失败，请检查设备或网络');
     return;
   }
-  currentImage.value = result.data;
+  currentImage.value = streamUrl;
   ElMessage.success('视频监控已开启');
-  streamInterval = setInterval(async () => {
-    const result = await getVideoStream(selectedDevice.value);
-    if (!result.data) {
-      stopStream();
-      ElMessage.warning('视频流已断开');
-      return;
-    }
-    currentImage.value = result.data;
-  }, 1000);
+
+  // mock 模式返回的是 data:image/... 静态帧，需要每秒轮询刷新
+  // 真实后端返回的是 HTTP 视频流地址，<img> 标签会持续加载，不需要轮询
+  if (streamUrl.startsWith('data:')) {
+    streamInterval = setInterval(async () => {
+      const frame = await getVideoStream(selectedDevice.value);
+      if (!frame) {
+        stopStream();
+        ElMessage.warning('视频流已断开');
+        return;
+      }
+      currentImage.value = frame;
+    }, 1000);
+  }
 };
 
 const stopStream = () => {
@@ -238,6 +252,8 @@ const stopStream = () => {
     clearInterval(streamInterval);
     streamInterval = null;
   }
+  // 清空 src，让 <img> 断开视频流连接（mock 和真实模式都需要）
+  currentImage.value = '';
   ElMessage.info('视频监控已停止');
 };
 
@@ -246,10 +262,37 @@ const captureFrame = () => {
     ElMessage.warning('请先开始监控');
     return;
   }
-  // 从当前视频流中截取当前帧
-  capturedFrame.value = currentImage.value;
-  capturedTime.value = formatTime();
-  ElMessage.success('画面已截取');
+
+  const img = videoImgRef.value;
+  if (!img) {
+    ElMessage.warning('无法获取视频画面元素');
+    return;
+  }
+
+  // mock 模式：data:image/... 静态帧，直接复制即可
+  if (currentImage.value.startsWith('data:')) {
+    capturedFrame.value = currentImage.value;
+    capturedTime.value = formatTime();
+    ElMessage.success('画面已截取');
+    return;
+  }
+
+  // 真实模式：MJPEG 视频流，用 Canvas 截取当前帧 → 转 base64 静态图
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width || 640;
+  canvas.height = img.naturalHeight || img.height || 480;
+  const ctx = canvas.getContext('2d');
+
+  try {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    capturedFrame.value = canvas.toDataURL('image/png');
+    capturedTime.value = formatTime();
+    ElMessage.success('画面已截取');
+  } catch (e) {
+    // 跨域导致 canvas 被污染：toDataURL 会抛出 SecurityError
+    console.error('截图失败:', e);
+    ElMessage.error('截图失败：视频流跨域限制，请联系后端配置 CORS 或通过代理访问');
+  }
 };
 
 const clearCaptured = () => {
@@ -292,15 +335,6 @@ const filteredHistory = computed(() => {
   if (filterDevice.value) {
     result = result.filter(item => item.deviceId === filterDevice.value);
   }
-  if (dateRange.value && dateRange.value.length === 2) {
-    const startDate = new Date(dateRange.value[0]);
-    const endDate = new Date(dateRange.value[1]);
-    endDate.setDate(endDate.getDate() + 1);
-    result = result.filter(item => {
-      const itemDate = new Date(item.detectTime);
-      return itemDate >= startDate && itemDate <= endDate;
-    });
-  }
   return result;
 });
 
@@ -325,13 +359,15 @@ const formatLocalTime = (date) => {
   const second = String(date.getSeconds()).padStart(2, '0');
   return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 };
+
 const loadHistory = async () => {
-  const endTime = formatLocalTime(new Date());
-  const startTime = formatLocalTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const datePicked = startTime.value && endTime.value;
+  const queryEndTime = datePicked ? endTime.value : formatLocalTime(new Date());
+  const queryStartTime = datePicked ? startTime.value : formatLocalTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
   detectHistory.value = await getDetectHistory({
     deviceId: selectedDevice.value,
-    startTime,
-    endTime
+    startTime: queryStartTime,
+    endTime: queryEndTime
   });
 };
 
@@ -386,7 +422,7 @@ onUnmounted(() => {
 
 .detect-grid {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 520px;
   gap: 24px;
 }
 
@@ -712,7 +748,13 @@ onUnmounted(() => {
 
 .date-picker {
  flex: 1;
- min-width: 200px;
+ min-width: 185px;
+}
+
+.range-separator {
+ margin: 0 6px;
+ color: #94a3b8;
+ font-size: 13px;
 }
 
 .history-list {

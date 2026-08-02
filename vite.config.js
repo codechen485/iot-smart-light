@@ -18,7 +18,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://192.168.162.114:8080',
+        target: 'http://172.16.2.76:8080',
+        changeOrigin: true
+      },
+      '/camera': {
+        target: 'http://172.16.2.76:5000',
         changeOrigin: true
       }
     }
