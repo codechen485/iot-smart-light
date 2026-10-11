@@ -14,10 +14,6 @@
         <span class="status-dot online"></span>
         <span class="status-text">系统在线</span>
       </div>
-      <div class="user-info">
-        <component :is="icons.User" class="user-icon" />
-        <span class="user-name">管理员</span>
-      </div>
     </div>
   </header>
 </template>
@@ -25,7 +21,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Menu, User } from '@element-plus/icons-vue'
+import { Menu } from '@element-plus/icons-vue'
 
 defineProps({
   collapsed: {
@@ -36,7 +32,7 @@ defineProps({
 
 defineEmits(['toggleSidebar'])
 
-const icons = { Menu, User }
+const icons = { Menu }
 const route = useRoute()
 
 const pageTitleMap = {
@@ -143,47 +139,18 @@ const pageTitle = computed(() => {
   font-weight: 500;
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-}
-
-.user-icon {
-  width: 18px;
-  height: 18px;
-  color: #64748b;
-}
-
-.user-name {
-  font-size: 13px;
-  color: #475569;
-  font-weight: 500;
-}
-
 @media (max-width: 768px) {
   .header {
     left: 60px;
     padding: 0 12px;
   }
-  
+
   .page-title {
     font-size: 14px;
   }
-  
+
   .status-badge {
     display: none;
-  }
-  
-  .user-name {
-    display: none;
-  }
-  
-  .user-info {
-    padding: 6px;
   }
 }
 </style>

@@ -15,7 +15,6 @@
 
         <el-select v-model="timeRange" class="filter-select" style="width: 90px" @change="handleTimeRangeChange">
           <el-option label="1小时" value="1h" />
-          <el-option label="6小时" value="6h" />
           <el-option label="24小时" value="24h" />
           <el-option label="7天" value="7d" />
         </el-select>
@@ -24,7 +23,7 @@
           v-model="startTime"
           type="datetime"
           placeholder="开始时间"
-          class="date-picker"
+          style="width: 185px"
           format="YYYY-MM-DD HH:mm:ss"
           value-format="YYYY-MM-DD HH:mm:ss"
         />
@@ -33,12 +32,12 @@
           v-model="endTime"
           type="datetime"
           placeholder="结束时间"
-          class="date-picker"
+          style="width: 185px"
           format="YYYY-MM-DD HH:mm:ss"
           value-format="YYYY-MM-DD HH:mm:ss"
         />
 
-        <el-button type="primary" @click="loadHistory">查询</el-button>
+        <el-button type="primary" :loading="loading" @click="loadHistory">查询</el-button>
       </div>
     </div>
 
@@ -47,7 +46,7 @@
         <div class="section-header">
           <h2 class="section-title">传感数据曲线</h2>
         </div>
-        <div ref="chartRef" class="chart-container"></div>
+        <SensorTrendChart :records="historyData" height="280px" />
       </div>
 
       <div class="section table-section">
@@ -59,6 +58,7 @@
             :data="historyData"
             border
             size="small"
+            max-height="500"
             :header-cell-style="{ backgroundColor: '#f8fafc', color: '#64748b', fontWeight: 500 }"
           >
             <el-table-column prop="time" label="时间" width="145" />
@@ -68,6 +68,17 @@
             <el-table-column prop="voltage" label="电压(V)" min-width="70" />
             <el-table-column prop="current" label="电流(A)" min-width="70" />
           </el-table>
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[10, 20, 50]"
+            layout="total, sizes, prev, pager, next"
+            :pager-count="5"
+            class="table-pagination"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
         </div>
       </div>
     </div>
@@ -75,19 +86,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
+import SensorTrendChart from '../components/SensorTrendChart.vue'
 import { getDeviceList, getHistoryData } from '../api/light'
 
 const devices = ref([])
 const filterDevice = ref('')
-const timeRange = ref('24h')
+const timeRange = ref('1h')
 const startTime = ref('')
 const endTime = ref('')
-const chartRef = ref(null)
-let chartInstance = null
 const historyData = ref([])
+const loading = ref(false)
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
 const loadDevices = async () => {
   const list = await getDeviceList()
@@ -116,11 +129,10 @@ const loadHistoryData = async (customStartTime = null, customEndTime = null) => 
     end = formatLocalTime(new Date())
     const ranges = {
       '1h': 1,
-      '6h': 6,
       '24h': 24,
       '7d': 7 * 24
     }
-    const hours = ranges[timeRange.value] || 24
+    const hours = ranges[timeRange.value] || 1
     start = formatLocalTime(new Date(Date.now() - hours * 60 * 60 * 1000))
   }
   startTime.value = start
@@ -131,11 +143,15 @@ const loadHistoryData = async (customStartTime = null, customEndTime = null) => 
     return
   }
 
-  historyData.value = await getHistoryData({
+  const result = await getHistoryData({
     deviceId: filterDevice.value,
     startTime: start,
-    endTime: end
+    endTime: end,
+    page: page.value,
+    pageSize: pageSize.value
   })
+  historyData.value = result.records || result || []
+  total.value = result.total || historyData.value.length
 }
 
 const handleTimeRangeChange = () => {
@@ -143,102 +159,16 @@ const handleTimeRangeChange = () => {
   endTime.value = ''
 }
 
-const initChart = () => {
-  if (!chartRef.value) return
-  if (!chartInstance) {
-    chartInstance = echarts.init(chartRef.value)
-  }
+// 切换页码：重新请求数据，图表由 SensorTrendChart 监听 records 自动重绘
+const handlePageChange = async (p) => {
+  page.value = p
+  await loadHistoryData(startTime.value, endTime.value)
+}
 
-  const sorted = [...historyData.value].sort((a, b) => new Date(a.time) - new Date(b.time))
-  const timeData = sorted.map(item => item.time)
-
-  let isLongSpan = false
-  if (timeData.length >= 2) {
-    const first = new Date(timeData[0])
-    const last = new Date(timeData[timeData.length - 1])
-    isLongSpan = (last - first) / (1000 * 60 * 60) > 24
-  }
-
-  const option = {
-    backgroundColor: 'transparent',
-    grid: { top: 30, right: 30, bottom: 40, left: 55 },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e2e8f0',
-      borderWidth: 1,
-      textStyle: { color: '#475569' },
-      formatter: function(params) {
-        let result = params[0].axisValue + '<br/>'
-        params.forEach(item => {
-          const unit = item.seriesName === '温度' ? '°C' : '%'
-          result += `${item.marker} ${item.seriesName}: ${item.value}${unit}<br/>`
-        })
-        return result
-      }
-    },
-    xAxis: {
-      type: 'time',
-      axisLine: { lineStyle: { color: '#e2e8f0' } },
-      axisTick: { show: false },
-      axisLabel: {
-        color: '#64748b',
-        fontSize: 11,
-        formatter: function(value) {
-          const date = new Date(value)
-          if (isLongSpan) {
-            const month = (date.getMonth() + 1).toString().padStart(2, '0')
-            const day = date.getDate().toString().padStart(2, '0')
-            return `${month}-${day}`
-          }
-          const hoursStr = date.getHours().toString().padStart(2, '0')
-          const minutes = date.getMinutes().toString().padStart(2, '0')
-          return `${hoursStr}:${minutes}`
-        }
-      },
-      splitLine: { show: false }
-    },
-    yAxis: {
-      type: 'value',
-      name: '温度(°C) / 湿度(%)',
-      nameTextStyle: { color: '#64748b', fontSize: 11 },
-      axisLine: { show: true, lineStyle: { color: '#cbd5e1' } },
-      axisTick: { show: false },
-      axisLabel: { color: '#64748b', fontSize: 11 },
-      splitLine: { lineStyle: { color: '#e2e8f0', type: 'dashed' } }
-    },
-    series: [
-      {
-        name: '温度',
-        type: 'line',
-        data: timeData.length > 0 ? sorted.map(item => [item.time, parseFloat(item.temperature)]) : [],
-        smooth: true,
-        symbol: 'none',
-        lineStyle: { color: '#ef4444', width: 2 },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(239, 68, 68, 0.1)' },
-            { offset: 1, color: 'rgba(239, 68, 68, 0)' }
-          ])
-        }
-      },
-      {
-        name: '湿度',
-        type: 'line',
-        data: timeData.length > 0 ? sorted.map(item => [item.time, parseFloat(item.humidity)]) : [],
-        smooth: true,
-        symbol: 'none',
-        lineStyle: { color: '#3b82f6', width: 2 },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(59, 130, 246, 0.1)' },
-            { offset: 1, color: 'rgba(59, 130, 246, 0)' }
-          ])
-        }
-      }
-    ]
-  }
-  chartInstance.setOption(option)
+const handleSizeChange = async (s) => {
+  pageSize.value = s
+  page.value = 1
+  await loadHistoryData(startTime.value, endTime.value)
 }
 
 const loadHistory = async () => {
@@ -246,27 +176,19 @@ const loadHistory = async () => {
     ElMessage.warning('请先选择设备')
     return
   }
+  loading.value = true
+  page.value = 1
   const datePicked = startTime.value && endTime.value
   await loadHistoryData(
     datePicked ? startTime.value : null,
     datePicked ? endTime.value : null
   )
-  initChart()
-}
-
-const handleResize = () => {
-  chartInstance?.resize()
+  loading.value = false
 }
 
 onMounted(async () => {
   await loadDevices()
   loadHistory()
-  window.addEventListener('resize', handleResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
 })
 </script>
 
@@ -321,9 +243,6 @@ onUnmounted(() => {
   width: 150px;
 }
 
-.date-picker {
-  width: 170px;
-}
 
 .range-separator {
   color: #94a3b8;
@@ -360,17 +279,13 @@ onUnmounted(() => {
   margin: 0;
 }
 
-.chart-container {
-  height: 360px;
-}
-
 .table-section {
   min-width: 0;
 }
 
-.table-container {
-  max-height: 400px;
-  overflow-y: auto;
+.table-pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1200px) {

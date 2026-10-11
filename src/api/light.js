@@ -18,9 +18,9 @@ const formatTime = (date) => {
 const generateRealTimeData = (deviceId) => {
   const now = formatTime()
   const data = {
-    light_01: { deviceId: 'light_01', temperature: 25.3, humidity: 61.5, lightIllum: 350, voltage: 5.02, current: 0.15, ledStatus: 1, time: now },
-    light_02: { deviceId: 'light_02', temperature: 24.8, humidity: 58.2, lightIllum: 320, voltage: 4.98, current: 0.14, ledStatus: 0, time: now },
-    light_03: { deviceId: 'light_03', temperature: 26.1, humidity: 63.8, lightIllum: 380, voltage: 5.05, current: 0.16, ledStatus: 1, time: now }
+    light_01: { deviceId: 'light_01', temperature: 25.3, humidity: 61.5, lightIllum: 350, voltage: 5.02, current: 0.15, ledStatus: 1, mode: 'manual', pwmLevel: 100, TJ: '1', HJ: '0', GJ: '0', DJ: '0', DL: '0', time: now },
+    light_02: { deviceId: 'light_02', temperature: 24.8, humidity: 58.2, lightIllum: 320, voltage: 4.98, current: 0.14, ledStatus: 0, mode: 'manual', pwmLevel: 0, TJ: '0', HJ: '0', GJ: '0', DJ: '0', DL: '0', time: now },
+    light_03: { deviceId: 'light_03', temperature: 26.1, humidity: 63.8, lightIllum: 380, voltage: 5.05, current: 0.16, ledStatus: 1, mode: 'auto', pwmLevel: 65, TJ: '0', HJ: '0', GJ: '0', DJ: '0', DL: '0', time: now }
   }
   return data[deviceId] || data.light_01
 }
@@ -48,12 +48,27 @@ const generateHistoryData = (params) => {
   return data
 }
 
-const mockAlertList = [
-  { deviceId: 'light_01', type: 'temperature', value: 36.2, threshold: 35, level: 'high', time: '2026-06-15 15:30:00' },
-  { deviceId: 'light_02', type: 'voltage', value: 5.6, threshold: 5.5, level: 'medium', time: '2026-06-15 14:20:00' },
-  { deviceId: 'light_01', type: 'humidity', value: 92, threshold: 90, level: 'medium', time: '2026-06-15 13:15:00' },
-  { deviceId: 'light_03', type: 'temperature', value: 34.8, threshold: 35, level: 'low', time: '2026-06-15 12:00:00' }
-]
+const generateMockAlerts = () => {
+  const devices = ['light_01', 'light_02', 'light_03']
+  const types = ['temperature', 'humidity', 'lightIllum', 'voltage', 'current']
+  const alerts = []
+  for (let i = 0; i < 45; i++) {
+    const type = types[Math.floor(Math.random() * types.length)]
+    const deviceId = devices[Math.floor(Math.random() * devices.length)]
+    const baseValues = { temperature: 35, humidity: 90, lightIllum: 1000, voltage: 5.5, current: 0.3 }
+    const time = new Date(Date.now() - i * 30 * 60 * 1000)
+    alerts.push({
+      deviceId,
+      type,
+      value: parseFloat((baseValues[type] + (Math.random() - 0.5) * 2).toFixed(1)),
+      threshold: baseValues[type],
+      time: formatTime(time)
+    })
+  }
+  return alerts
+}
+
+const mockAlertList = generateMockAlerts()
 
 const generateMockVideoFrame = () => {
   const colors = ['#fef3c7', '#dbeafe', '#d1fae5', '#fee2e2', '#fce7f3']
@@ -71,12 +86,22 @@ const generateMockVideoFrame = () => {
   return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)))
 }
 
-const mockDetectHistory = [
-  { deviceId: 'light_01', personNum: 2, originalImage: '', processedImage: '', detectTime: '2026-06-15 15:35:10' },
-  { deviceId: 'light_01', personNum: 1, originalImage: '', processedImage: '', detectTime: '2026-06-15 15:30:00' },
-  { deviceId: 'light_01', personNum: 3, originalImage: '', processedImage: '', detectTime: '2026-06-15 15:25:00' },
-  { deviceId: 'light_01', personNum: 0, originalImage: '', processedImage: '', detectTime: '2026-06-15 15:20:00' }
-]
+const generateMockDetectHistory = () => {
+  const records = []
+  for (let i = 0; i < 30; i++) {
+    const time = new Date(Date.now() - i * 20 * 60 * 1000)
+    records.push({
+      deviceId: i % 3 === 0 ? 'light_02' : 'light_01',
+      personNum: Math.floor(Math.random() * 5),
+      originalImage: '',
+      processedImage: '',
+      detectTime: formatTime(time)
+    })
+  }
+  return records
+}
+
+const mockDetectHistory = generateMockDetectHistory()
 
 export async function getDeviceList() {
   if (IS_MOCK) {
@@ -118,33 +143,39 @@ export async function controlDevice(data) {
     await delay(MOCK_DELAY)
     return { success: true }
   }
-  try {
-    return await request({
-      //修改接口
-      url: '/api/light/control',
-      method: 'post',
-      data
-    })
-  } catch (error) {
-    console.log('[API] controlDevice:', error.message)
-    return { success: false }
-  }
+  return await request({
+    //修改接口
+    url: '/api/light/control',
+    method: 'post',
+    data
+  })
 }
 
 export async function getHistoryData(params) {
   if (IS_MOCK) {
     await delay(MOCK_DELAY)
-    return generateHistoryData(params)
+    const all = generateHistoryData(params)
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const start = (page - 1) * pageSize
+    const records = all.slice(start, start + pageSize)
+    return { records, total: all.length, page, pageSize }
   }
   try {
-    return await request({
+    const res = await request({
       url: '/api/light/history',
       method: 'get',
       params
     })
+    return {
+      records: res.records || [],
+      total: res.total || 0,
+      page: res.page || params.page || 1,
+      pageSize: res.pageSize || params.pageSize || 20
+    }
   } catch (error) {
     console.log('[API] getHistoryData:', error.message)
-    return []
+    return { records: [], total: 0, page: params.page || 1, pageSize: params.pageSize || 20 }
   }
 }
 
@@ -168,17 +199,27 @@ export async function setAlertThreshold(data) {
 export async function getAlertList(params) {
   if (IS_MOCK) {
     await delay(MOCK_DELAY)
-    return mockAlertList
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const start = (page - 1) * pageSize
+    const records = mockAlertList.slice(start, start + pageSize)
+    return { records, total: mockAlertList.length, page, pageSize }
   }
   try {
-    return await request({
+    const res = await request({
       url: '/api/light/alert/list',
       method: 'get',
       params
     })
+    return {
+      records: res.records || [],
+      total: res.total || 0,
+      page: res.page || params.page || 1,
+      pageSize: res.pageSize || params.pageSize || 20
+    }
   } catch (error) {
     console.log('[API] getAlertList:', error.message)
-    return []
+    return { records: [], total: 0, page: params.page || 1, pageSize: params.pageSize || 20 }
   }
 }
 
@@ -188,8 +229,6 @@ export async function getVideoStream(deviceId) {
     return generateMockVideoFrame()
   }
   try {
-    // 文档定义：接口返回 JSON，data 字段是视频流地址 URL 字符串
-    // 如 {"code":200,"msg":"success","data":"http://192.168.162.114:5000/camera/stream"}
     const url = await request({
       url: '/api/light/video/stream',
       method: 'get',
@@ -233,16 +272,26 @@ export async function detectPerson(data) {
 export async function getDetectHistory(params) {
   if (IS_MOCK) {
     await delay(MOCK_DELAY)
-    return mockDetectHistory
+    const page = params.page || 1
+    const pageSize = params.pageSize || 20
+    const start = (page - 1) * pageSize
+    const records = mockDetectHistory.slice(start, start + pageSize)
+    return { records, total: mockDetectHistory.length, page, pageSize }
   }
   try {
-    return await request({
+    const res = await request({
       url: '/api/light/detect/list',
       method: 'get',
       params
     })
+    return {
+      records: res.records || [],
+      total: res.total || 0,
+      page: res.page || params.page || 1,
+      pageSize: res.pageSize || params.pageSize || 20
+    }
   } catch (error) {
     console.log('[API] getDetectHistory:', error.message)
-    return []
+    return { records: [], total: 0, page: params.page || 1, pageSize: params.pageSize || 20 }
   }
 }

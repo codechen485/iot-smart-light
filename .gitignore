@@ -37,3 +37,7 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# 不上传的本地文档
+开发文档.md
+试题.txt

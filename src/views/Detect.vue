@@ -117,7 +117,7 @@
               v-model="startTime"
               type="datetime"
               placeholder="开始时间"
-              class="date-picker"
+              style="flex: 1; min-width: 130px"
               format="YYYY-MM-DD HH:mm:ss"
               value-format="YYYY-MM-DD HH:mm:ss"
             />
@@ -126,26 +126,26 @@
               v-model="endTime"
               type="datetime"
               placeholder="结束时间"
-              class="date-picker"
+              style="flex: 1; min-width: 130px"
               format="YYYY-MM-DD HH:mm:ss"
               value-format="YYYY-MM-DD HH:mm:ss"
             />
-            <el-button size="small" type="primary" @click="filterHistory">筛选</el-button>
+            <el-button size="small" type="primary" :loading="loading" @click="filterHistory">筛选</el-button>
           </div>
           
           <div class="history-list">
-            <div 
-              v-for="record in filteredHistory" 
-              :key="record.detectTime" 
+            <div
+              v-for="record in detectHistory"
+              :key="record.detectTime"
               class="history-item"
             >
               <div class="history-images">
                 <div class="history-image original">
-                  <img :src="record.originalImage" />
+                  <el-image :src="record.originalImage" preview-teleported :preview-src-list="[record.originalImage]" fit="cover" />
                   <span class="image-label">原图</span>
                 </div>
                 <div class="history-image processed">
-                  <img :src="record.processedImage" />
+                  <el-image :src="record.processedImage" preview-teleported :preview-src-list="[record.processedImage]" fit="cover" />
                   <span class="image-label">识别后</span>
                 </div>
               </div>
@@ -156,15 +156,27 @@
               </div>
             </div>
           </div>
+
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[10, 20, 50]"
+            layout="total, sizes, prev, pager, next"
+            :pager-count="5"
+            class="history-pagination"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
         </div>
-        
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Search, VideoCamera, Camera, Download, User, Lightning, VideoPlay, VideoPause } from '@element-plus/icons-vue';
 import { detectPerson, getDetectHistory, getVideoStream, getDeviceList } from '../api/light';
@@ -203,13 +215,16 @@ const detectHistory = ref([]);
 const filterDevice = ref('');
 const startTime = ref('');
 const endTime = ref('');
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
 
-let streamInterval = null;
+const loading = ref(false)
+let streamInterval = null
 
 const selectDevice = (deviceId) => {
-  selectedDevice.value = deviceId;
-  loadHistory();
-};
+  selectedDevice.value = deviceId
+}
 
 // 视频流功能
 const toggleStream = () => {
@@ -298,6 +313,7 @@ const captureFrame = () => {
 const clearCaptured = () => {
   capturedFrame.value = '';
   capturedTime.value = '';
+  hasDetected.value = false;
 };
 
 const startDetection = async () => {
@@ -330,17 +346,21 @@ const downloadImage = () => {
   }
 };
 
-const filteredHistory = computed(() => {
-  let result = [...detectHistory.value];
-  if (filterDevice.value) {
-    result = result.filter(item => item.deviceId === filterDevice.value);
-  }
-  return result;
-});
-
 const filterHistory = () => {
-  loadHistory();
-};
+  page.value = 1
+  loadHistory()
+}
+
+const handlePageChange = async (p) => {
+  page.value = p
+  await loadHistory()
+}
+
+const handleSizeChange = async (s) => {
+  pageSize.value = s
+  page.value = 1
+  await loadHistory()
+}
 
 const loadDevices = async () => {
   const list = await getDeviceList();
@@ -361,15 +381,21 @@ const formatLocalTime = (date) => {
 };
 
 const loadHistory = async () => {
-  const datePicked = startTime.value && endTime.value;
-  const queryEndTime = datePicked ? endTime.value : formatLocalTime(new Date());
-  const queryStartTime = datePicked ? startTime.value : formatLocalTime(new Date(Date.now() - 24 * 60 * 60 * 1000));
-  detectHistory.value = await getDetectHistory({
-    deviceId: selectedDevice.value,
+  loading.value = true
+  const datePicked = startTime.value && endTime.value
+  const queryEndTime = datePicked ? endTime.value : formatLocalTime(new Date())
+  const queryStartTime = datePicked ? startTime.value : formatLocalTime(new Date(Date.now() - 1 * 60 * 60 * 1000))
+  const result = await getDetectHistory({
+    deviceId: filterDevice.value,
     startTime: queryStartTime,
-    endTime: queryEndTime
-  });
-};
+    endTime: queryEndTime,
+    page: page.value,
+    pageSize: pageSize.value
+  })
+  detectHistory.value = result.records || result || []
+  total.value = result.total || detectHistory.value.length
+  loading.value = false
+}
 
 const formatTime = (date = new Date()) => {
   const pad = (n) => n.toString().padStart(2, '0');
@@ -735,21 +761,19 @@ onUnmounted(() => {
 
 .filter-bar {
  display: flex;
- gap: 12px;
+ gap: 8px;
  margin-bottom: 16px;
  padding-bottom: 12px;
  border-bottom: 1px solid #f1f5f9;
+ flex-wrap: wrap;
 }
 
 .filter-select {
- flex: 1;
- min-width: 100px;
+  flex: 1;
+  min-width: 80px;
 }
 
-.date-picker {
- flex: 1;
- min-width: 185px;
-}
+
 
 .range-separator {
  margin: 0 6px;
@@ -761,8 +785,13 @@ onUnmounted(() => {
  display: flex;
  flex-direction: column;
  gap: 12px;
- max-height: 400px;
+ max-height: 420px;
  overflow-y: auto;
+}
+
+.history-pagination {
+  margin-top: 12px;
+  justify-content: flex-end;
 }
 
 .history-item {
@@ -787,10 +816,15 @@ onUnmounted(() => {
  position: relative;
 }
 
-.history-image img {
- width: 100%;
- height: 100%;
- object-fit: cover;
+.history-image :deep(.el-image) {
+  width: 100%;
+  height: 100%;
+}
+
+.history-image :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .image-label {

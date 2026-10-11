@@ -21,58 +21,18 @@
         :row-style="{ height: '60px' }"
       >
       <!-- 修改文字 -->
-        <el-table-column prop="deviceId" label="设备编号" min-width="120">
+        <el-table-column prop="deviceId" label="设备编号" min-width="180">
           <template #default="scope">
             <div class="device-id-cell">
-              <component :is="icons.Lightbulb" class="device-icon" :class="{ active: scope.row.ledStatus === 1 }" />
+              <component :is="icons.Lightbulb" class="device-icon" />
               <span>{{ scope.row.deviceId }}</span>
             </div>
           </template>
         </el-table-column>
-        <!-- 修改传感器数据 -->
-        <el-table-column prop="temperature" label="温度" width="100">
-          <template #default="scope">
-            <span>{{ scope.row.temperature }}°C</span>
-          </template>
-        </el-table-column>
 
-         <el-table-column prop="humidity" label="湿度" width="100">
-          <template #default="scope">
-            <span>{{ scope.row.humidity }}%</span>
-          </template>
-        </el-table-column>
+        <el-table-column prop="time" label="最后上报时间" min-width="170" />
 
-        <el-table-column prop="lightIllum" label="光照" width="100">
-          <template #default="scope">
-            <span>{{ scope.row.lightIllum }}lx</span>
-          </template>
-        </el-table-column>
-
-         <el-table-column prop="voltage" label="电压" width="100">
-          <template #default="scope">
-            <span>{{ scope.row.voltage }}V</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="current" label="电流" width="100">
-          <template #default="scope">
-            <span>{{ scope.row.current }}A</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="ledStatus" label="LED状态" width="100">
-          <template #default="scope">
-            <el-switch
-              :checked="scope.row.ledOn"
-              :model-value="scope.row.ledOn"
-              @change="handleLedChange(scope.row)"
-              active-color="#10b981"
-              inactive-color="#cbd5e1"
-            />
-          </template>
-        </el-table-column>
-
-        <el-table-column label="操作" width="140">
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="scope">
             <el-button
               size="small"
@@ -92,11 +52,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Lightning, Refresh, Camera } from '@element-plus/icons-vue'
-import { getDeviceList, getRealTimeData, controlDevice } from '../api/light'
+import { Lightning, Refresh, View } from '@element-plus/icons-vue'
+import { getDeviceList, getRealTimeData } from '../api/light'
 
-const icons = { Lightbulb: Lightning, Refresh, Eye: Camera }
+const icons = { Lightbulb: Lightning, Refresh, Eye: View }
 const router = useRouter()
 const devices = ref([])
 
@@ -104,31 +63,11 @@ const loadDevices = async () => {
   const list = await getDeviceList()
   const promises = list.map(item => getRealTimeData(item.deviceId))
   const results = await Promise.all(promises)
-
-  devices.value = results.map(result => ({
-    ...result,
-    ledOn: Number(result.ledStatus) === 1
-  }))
+  devices.value = results
 }
 
 const goToDetail = (deviceId) => {
   router.push(`/device/${deviceId}`)
-}
-
-const handleLedChange = async (device) => {
-  const newStatus = device.ledStatus === 1 ? 0 : 1
-  try {
-    await controlDevice({
-      deviceId: device.deviceId,
-      cmd: newStatus === 1 ? 'ledOn' : 'ledOff'
-    })
-    device.ledStatus = newStatus
-    device.ledOn = newStatus === 1
-  } catch (error) {
-    device.ledStatus = newStatus === 1 ? 0 : 1
-    device.ledOn = device.ledStatus === 1
-    ElMessage.error('控制失败，设备无响应')
-  }
 }
 
 onMounted(() => {
@@ -186,10 +125,6 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   color: #94a3b8;
-}
-
-.device-icon.active {
-  color: #f59e0b;
 }
 
 @media (max-width: 768px) {
