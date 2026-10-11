@@ -33,7 +33,7 @@ const DEFAULT_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6']
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 
 const props = defineProps({
   // 历史记录数组，每条含 time 及 fields 里声明的字段，如 { time, temperature, pressure, flow }

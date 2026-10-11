@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const service = axios.create({
   baseURL: '',
-  timeout: 600000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
