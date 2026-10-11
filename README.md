@@ -67,7 +67,3 @@ npm run build
 # 本地预览构建产物
 npm run preview
 ```
-
-## 远程仓库
-
-Gitee：https://gitee.com/yg3368/iot-smart-light-vue.git
